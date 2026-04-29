@@ -14,7 +14,9 @@
 let run = false
 let worker = "w_" + Math.random()
 
-async function sleep(ms){return new Promise(r=>setTimeout(r,ms))}
+function sleep(ms){
+  return new Promise(r => setTimeout(r, ms))
+}
 
 async function loop(){
   if(!run) return
@@ -22,7 +24,17 @@ async function loop(){
   try {
     document.getElementById("s").innerText = "requesting"
 
-    let t = await fetch("/get_task?w=" + worker).then(r => r.json())
+    let res = await fetch("/get_task?w=" + worker)
+
+    if (!res.ok) {
+      throw new Error("HTTP " + res.status)
+    }
+
+    let t = await res.json()
+
+    if (!t || !t.start_k || !t.end_k) {
+      throw new Error("bad task: " + JSON.stringify(t))
+    }
 
     let sum = 0
     for (let k = t.start_k; k < t.end_k; k++) {
@@ -43,8 +55,11 @@ async function loop(){
     })
 
     let s = await fetch("/status").then(r => r.json())
+
     document.getElementById("p").innerText =
-      "π: " + s.pi + " | tasks: " + s.tasks_done
+      "π: " + s.pi +
+      " | tasks: " + s.tasks_done +
+      " | speed: " + s.speed
 
     document.getElementById("s").innerText = "waiting"
 
@@ -52,7 +67,7 @@ async function loop(){
 
   } catch(e) {
     document.getElementById("s").innerText =
-      "error retrying in 3s"
+      "error retrying in 3s: " + e.message
 
     await sleep(3000)
   }
