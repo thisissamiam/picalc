@@ -2,87 +2,67 @@
 <html>
 <body>
 
-<div id="s">idle</div>
-<div id="p"></div>
-<div id="e"></div>
-<div id="u"></div>
+<h2>Worker</h2>
+
+<div id="status">idle</div>
+<div id="url"></div>
+<div id="out"></div>
 
 <button onclick="start()">Start</button>
 <button onclick="stop()">Stop</button>
 
 <script>
+
 const DOMAIN = "https://bestuserever.pythonanywhere.com"
 
 let run = false
-let w = "u" + Math.random()
-
-function showURL(url) {
-  document.getElementById("u").innerText = "USING URL: " + url
-}
+let workerId = "w" + Math.random()
 
 async function loop() {
   if (!run) return
 
-  let getTaskURL = `${DOMAIN}/get_task?w=${w}`
-  showURL(getTaskURL)
+  document.getElementById("status").innerText = "requesting task..."
 
-  document.getElementById("s").innerText = "requesting"
-  document.getElementById("e").innerText = ""
+  const taskURL = `${DOMAIN}/get_task?w=${workerId}`
+  document.getElementById("url").innerText = "GET " + taskURL
 
   try {
-    let res = await fetch(getTaskURL, { mode: "cors" })
+    let t = await fetch(taskURL).then(r => r.json())
 
-    if (!res.ok) {
-      throw new Error(`${getTaskURL} → HTTP ${res.status}`)
+    if (t.done) {
+      document.getElementById("status").innerText = "ALL DONE"
+      return
     }
 
-    let t = await res.json()
+    let found = null
 
-    let sum = 0
-    for (let k = t.start_k; k < t.end_k; k++) {
-      sum += Math.pow(-1, k) / (2 * k + 1)
+    for (let i = t.start; i < t.end; i++) {
+      let guess = i.toString(36)  // simple encoding
+
+      if (guess === "secret") {   // placeholder match logic
+        found = guess
+        break
+      }
     }
-    sum *= 4
 
-    let submitURL = `${DOMAIN}/submit`
-    showURL(submitURL)
+    document.getElementById("status").innerText = "submitting..."
 
-    document.getElementById("s").innerText = "submitting"
-
-    let sres = await fetch(submitURL, {
+    await fetch(`${DOMAIN}/submit`, {
       method: "POST",
-      mode: "cors",
-      headers: { "Content-Type": "application/json" },
+      headers: {"Content-Type": "application/json"},
       body: JSON.stringify({
         task_id: t.task_id,
-        value: sum,
-        worker: w
+        result: found
       })
     })
 
-    if (!sres.ok) {
-      throw new Error(`${submitURL} → HTTP ${sres.status}`)
-    }
+    document.getElementById("status").innerText = "cycle complete"
 
-    let statusURL = `${DOMAIN}/status`
-    showURL(statusURL)
-
-    let s = await fetch(statusURL, { mode: "cors" })
-
-    if (!s.ok) {
-      throw new Error(`${statusURL} → HTTP ${s.status}`)
-    }
-
-    let data = await s.json()
-
-    document.getElementById("p").innerText =
-      `π: ${data.pi} | tasks: ${data.tasks_done} | speed: ${data.speed}`
-
-    setTimeout(loop, 0)
+    setTimeout(loop, 200)
 
   } catch (e) {
-    document.getElementById("e").innerText =
-      "ERROR → " + e.message
+    document.getElementById("status").innerText =
+      "ERROR: " + e + " retrying in 3s"
 
     setTimeout(loop, 3000)
   }
@@ -95,8 +75,8 @@ function start() {
 
 function stop() {
   run = false
-  document.getElementById("s").innerText = "stopped"
 }
+
 </script>
 
 </body>
