@@ -1,8 +1,10 @@
 <!DOCTYPE html>
 <html>
 <body>
+
 <div id="s">idle</div>
 <div id="p"></div>
+<div id="e"></div>
 
 <button onclick="start()">Start</button>
 <button onclick="stop()">Stop</button>
@@ -17,9 +19,16 @@ async function loop() {
   if (!run) return
 
   document.getElementById("s").innerText = "requesting"
+  document.getElementById("e").innerText = ""
 
   try {
-    let t = await fetch(`${DOMAIN}/get_task?w=${w}`).then(r => r.json())
+    let res = await fetch(`${DOMAIN}/get_task?w=${w}`)
+
+    if (!res.ok) {
+      throw new Error("GET /get_task failed: " + res.status)
+    }
+
+    let t = await res.json()
 
     let sum = 0
     for (let k = t.start_k; k < t.end_k; k++) {
@@ -29,7 +38,7 @@ async function loop() {
 
     document.getElementById("s").innerText = "submitting"
 
-    await fetch(`${DOMAIN}/submit`, {
+    let sres = await fetch(`${DOMAIN}/submit`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -39,14 +48,26 @@ async function loop() {
       })
     })
 
-    let s = await fetch(`${DOMAIN}/status`).then(r => r.json())
+    if (!sres.ok) {
+      throw new Error("POST /submit failed: " + sres.status)
+    }
+
+    let s = await fetch(`${DOMAIN}/status`)
+    if (!s.ok) {
+      throw new Error("GET /status failed: " + s.status)
+    }
+
+    let data = await s.json()
+
     document.getElementById("p").innerText =
-      `π: ${s.pi} | tasks: ${s.tasks_done} | speed: ${s.speed}`
+      `π: ${data.pi} | tasks: ${data.tasks_done} | speed: ${data.speed}`
 
     setTimeout(loop, 0)
 
   } catch (e) {
-    document.getElementById("s").innerText = "error retrying in 3s"
+    document.getElementById("e").innerText =
+      "ERROR: " + e.message + " → retrying in 3s"
+
     setTimeout(loop, 3000)
   }
 }
