@@ -2,24 +2,29 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>BOINC π Worker</title>
+  <title>BOINC π Worker (Visible Debug)</title>
   <style>
     body { font-family: monospace; background:#111; color:#0f0; padding:20px; }
     button { padding:10px; margin:5px; }
-    .box { margin-top:10px; }
+    #box { margin-top:10px; padding:10px; background:#000; white-space:pre-wrap; }
+    .ok { color:#0f0; }
+    .err { color:#ff4444; }
+    .warn { color:#ffcc00; }
   </style>
 </head>
 <body>
 
-<h2>BOINC π Distributed Worker</h2>
+<h2>BOINC π Worker</h2>
 
 <button onclick="start()">Start</button>
 <button onclick="stop()">Stop</button>
 
-<div class="box" id="status">Idle</div>
+<div id="status">Idle</div>
+<div id="box">Waiting...</div>
 
 <script>
 const API = "https://bestuserever.pythonanywhere.com";
+
 let running = false;
 let worker_id = localStorage.getItem("worker_id");
 
@@ -28,35 +33,72 @@ if (!worker_id) {
   localStorage.setItem("worker_id", worker_id);
 }
 
+function show(msg, type="ok") {
+  const box = document.getElementById("box");
+  box.innerHTML += `<div class="${type}">${msg}</div>`;
+}
+
+function setStatus(msg) {
+  document.getElementById("status").innerText = msg;
+}
+
 function madhava(start_k, end_k) {
   let sum = 0;
-
   for (let k = start_k; k < end_k; k++) {
     let sign = (k % 2 === 0) ? 1 : -1;
     sum += sign / (2 * k + 1);
   }
-
   return sum;
 }
 
 async function loop() {
   while (running) {
+
+    show("Requesting task...", "warn");
+
+    let res;
     try {
-      // GET TASK
-      let res = await fetch(API + "/get_task");
-      let task = await res.json();
+      res = await fetch(API + "/get_task");
+    } catch (e) {
+      show("NETWORK ERROR: " + e, "err");
+      await delay();
+      continue;
+    }
 
-      let start_k = task.start_k;
-      let end_k = task.end_k;
+    show("GET /get_task → HTTP " + res.status,
+         res.ok ? "ok" : "err");
 
-      document.getElementById("status").innerText =
-        "Working: " + task.task_id;
+    if (!res.ok) {
+      let t = await res.text();
+      show("SERVER RESPONSE:\n" + t, "err");
+      await delay();
+      continue;
+    }
 
-      // COMPUTE
-      let partial = madhava(start_k, end_k);
+    let task;
+    try {
+      task = await res.json();
+    } catch (e) {
+      let t = await res.text();
+      show("JSON ERROR: " + e, "err");
+      show("RAW RESPONSE:\n" + t, "err");
+      await delay();
+      continue;
+    }
 
-      // SUBMIT
-      await fetch(API + "/submit", {
+    show("TASK RECEIVED: " + JSON.stringify(task), "ok");
+
+    setStatus("Working: " + task.task_id);
+
+    let partial = madhava(task.start_k, task.end_k);
+
+    show("COMPUTED RESULT: " + partial, "ok");
+
+    show("Submitting result...", "warn");
+
+    let submitRes;
+    try {
+      submitRes = await fetch(API + "/submit", {
         method: "POST",
         headers: {"Content-Type":"application/json"},
         body: JSON.stringify({
@@ -65,25 +107,39 @@ async function loop() {
           worker_id: worker_id
         })
       });
-
     } catch (e) {
-      document.getElementById("status").innerText =
-        "Error / retrying...";
-      await new Promise(r => setTimeout(r, 2000));
+      show("SUBMIT NETWORK ERROR: " + e, "err");
+      await delay();
+      continue;
     }
+
+    show("POST /submit → HTTP " + submitRes.status,
+         submitRes.ok ? "ok" : "err");
+
+    if (!submitRes.ok) {
+      let t = await submitRes.text();
+      show("SUBMIT RESPONSE:\n" + t, "err");
+    }
+
+    show("Cycle complete\n---", "ok");
   }
 }
 
+function delay() {
+  return new Promise(r => setTimeout(r, 2000));
+}
+
 function start() {
-  if (!running) {
-    running = true;
-    loop();
-  }
+  running = true;
+  setStatus("Running");
+  show("STARTED", "ok");
+  loop();
 }
 
 function stop() {
   running = false;
-  document.getElementById("status").innerText = "Stopped";
+  setStatus("Stopped");
+  show("STOPPED", "warn");
 }
 </script>
 
