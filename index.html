@@ -5,6 +5,7 @@
 <div id="s">idle</div>
 <div id="p"></div>
 <div id="e"></div>
+<div id="u"></div>
 
 <button onclick="start()">Start</button>
 <button onclick="stop()">Stop</button>
@@ -15,17 +16,24 @@ const DOMAIN = "https://bestuserever.pythonanywhere.com"
 let run = false
 let w = "u" + Math.random()
 
+function showURL(url) {
+  document.getElementById("u").innerText = "USING URL: " + url
+}
+
 async function loop() {
   if (!run) return
+
+  let getTaskURL = `${DOMAIN}/get_task?w=${w}`
+  showURL(getTaskURL)
 
   document.getElementById("s").innerText = "requesting"
   document.getElementById("e").innerText = ""
 
   try {
-    let res = await fetch(`${DOMAIN}/get_task?w=${w}`)
+    let res = await fetch(getTaskURL, { mode: "cors" })
 
     if (!res.ok) {
-      throw new Error("GET /get_task failed: " + res.status)
+      throw new Error(`${getTaskURL} → HTTP ${res.status}`)
     }
 
     let t = await res.json()
@@ -36,10 +44,14 @@ async function loop() {
     }
     sum *= 4
 
+    let submitURL = `${DOMAIN}/submit`
+    showURL(submitURL)
+
     document.getElementById("s").innerText = "submitting"
 
-    let sres = await fetch(`${DOMAIN}/submit`, {
+    let sres = await fetch(submitURL, {
       method: "POST",
+      mode: "cors",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         task_id: t.task_id,
@@ -49,12 +61,16 @@ async function loop() {
     })
 
     if (!sres.ok) {
-      throw new Error("POST /submit failed: " + sres.status)
+      throw new Error(`${submitURL} → HTTP ${sres.status}`)
     }
 
-    let s = await fetch(`${DOMAIN}/status`)
+    let statusURL = `${DOMAIN}/status`
+    showURL(statusURL)
+
+    let s = await fetch(statusURL, { mode: "cors" })
+
     if (!s.ok) {
-      throw new Error("GET /status failed: " + s.status)
+      throw new Error(`${statusURL} → HTTP ${s.status}`)
     }
 
     let data = await s.json()
@@ -66,7 +82,7 @@ async function loop() {
 
   } catch (e) {
     document.getElementById("e").innerText =
-      "ERROR: " + e.message + " → retrying in 3s"
+      "ERROR → " + e.message
 
     setTimeout(loop, 3000)
   }
