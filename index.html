@@ -1,44 +1,75 @@
 <!DOCTYPE html>
 <html>
 <body>
+
+<h3>BOINC π Worker</h3>
+
+<button onclick="start()">Start</button>
+<button onclick="stop()">Stop</button>
+
 <div id="s">idle</div>
 <div id="p"></div>
 
 <script>
-let run=false,w="u"+Math.random()
+let run = false
+let worker = "w_" + Math.random()
+
+async function sleep(ms){return new Promise(r=>setTimeout(r,ms))}
 
 async function loop(){
   if(!run) return
 
-  document.getElementById("s").innerText="requesting"
+  try {
+    document.getElementById("s").innerText = "requesting"
 
-  let t=await fetch("/get_task?w="+w).then(r=>r.json())
+    let t = await fetch("/get_task?w=" + worker).then(r => r.json())
 
-  let sum=0
-  for(let k=t.start_k;k<t.end_k;k++){
-    sum += Math.pow(-1,k)/(2*k+1)
+    let sum = 0
+    for (let k = t.start_k; k < t.end_k; k++) {
+      sum += Math.pow(-1, k) / (2*k + 1)
+    }
+    sum *= 4
+
+    document.getElementById("s").innerText = "submitting"
+
+    await fetch("/submit", {
+      method: "POST",
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        task_id: t.task_id,
+        value: sum,
+        worker: worker
+      })
+    })
+
+    let s = await fetch("/status").then(r => r.json())
+    document.getElementById("p").innerText =
+      "π: " + s.pi + " | tasks: " + s.tasks_done
+
+    document.getElementById("s").innerText = "waiting"
+
+    await sleep(1500)
+
+  } catch(e) {
+    document.getElementById("s").innerText =
+      "error retrying in 3s"
+
+    await sleep(3000)
   }
-  sum*=4
 
-  document.getElementById("s").innerText="done"
-
-  await fetch("/submit",{method:"POST",
-    headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({task_id:t.task_id,value:sum,worker:w})
-  })
-
-  let s=await fetch("/status").then(r=>r.json())
-  document.getElementById("p").innerText=s.pi
-
-  setTimeout(loop,0)
+  loop()
 }
 
-function start(){run=true;loop()}
-function stop(){run=false}
-</script>
+function start(){
+  run = true
+  loop()
+}
 
-<button onclick="start()">Start</button>
-<button onclick="stop()">Stop</button>
+function stop(){
+  run = false
+  document.getElementById("s").innerText = "stopped"
+}
+</script>
 
 </body>
 </html>
