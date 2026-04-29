@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>BOINC π Worker</title>
+  <style>
+    body { font-family: monospace; background:#111; color:#0f0; padding:20px; }
+    button { padding:10px; margin:5px; }
+    .box { margin-top:10px; }
+  </style>
+</head>
+<body>
+
+<h2>BOINC π Distributed Worker</h2>
+
+<button onclick="start()">Start</button>
+<button onclick="stop()">Stop</button>
+
+<div class="box" id="status">Idle</div>
+
+<script>
+const API = "https://bestuserever.pythonanywhere.com";
+let running = false;
+let worker_id = localStorage.getItem("worker_id");
+
+if (!worker_id) {
+  worker_id = Math.random().toString(36).substring(2);
+  localStorage.setItem("worker_id", worker_id);
+}
+
+function madhava(start_k, end_k) {
+  let sum = 0;
+
+  for (let k = start_k; k < end_k; k++) {
+    let sign = (k % 2 === 0) ? 1 : -1;
+    sum += sign / (2 * k + 1);
+  }
+
+  return sum;
+}
+
+async function loop() {
+  while (running) {
+    try {
+      // GET TASK
+      let res = await fetch(API + "/get_task");
+      let task = await res.json();
+
+      let start_k = task.start_k;
+      let end_k = task.end_k;
+
+      document.getElementById("status").innerText =
+        "Working: " + task.task_id;
+
+      // COMPUTE
+      let partial = madhava(start_k, end_k);
+
+      // SUBMIT
+      await fetch(API + "/submit", {
+        method: "POST",
+        headers: {"Content-Type":"application/json"},
+        body: JSON.stringify({
+          task_id: task.task_id,
+          partial_sum: partial,
+          worker_id: worker_id
+        })
+      });
+
+    } catch (e) {
+      document.getElementById("status").innerText =
+        "Error / retrying...";
+      await new Promise(r => setTimeout(r, 2000));
+    }
+  }
+}
+
+function start() {
+  if (!running) {
+    running = true;
+    loop();
+  }
+}
+
+function stop() {
+  running = false;
+  document.getElementById("status").innerText = "Stopped";
+}
+</script>
+
+</body>
+</html>
