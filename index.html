@@ -1,86 +1,62 @@
 <!DOCTYPE html>
 <html>
 <body>
-
-<h3>BOINC π Worker</h3>
+<div id="s">idle</div>
+<div id="p"></div>
 
 <button onclick="start()">Start</button>
 <button onclick="stop()">Stop</button>
 
-<div id="s">idle</div>
-<div id="p"></div>
-
 <script>
+const DOMAIN = "https://bestuserever.pythonanywhere.com"
+
 let run = false
-let worker = "w_" + Math.random()
+let w = "u" + Math.random()
 
-function sleep(ms){
-  return new Promise(r => setTimeout(r, ms))
-}
+async function loop() {
+  if (!run) return
 
-async function loop(){
-  if(!run) return
+  document.getElementById("s").innerText = "requesting"
 
   try {
-    document.getElementById("s").innerText = "requesting"
-
-    let res = await fetch("/get_task?w=" + worker)
-
-    if (!res.ok) {
-      throw new Error("HTTP " + res.status)
-    }
-
-    let t = await res.json()
-
-    if (!t || !t.start_k || !t.end_k) {
-      throw new Error("bad task: " + JSON.stringify(t))
-    }
+    let t = await fetch(`${DOMAIN}/get_task?w=${w}`).then(r => r.json())
 
     let sum = 0
     for (let k = t.start_k; k < t.end_k; k++) {
-      sum += Math.pow(-1, k) / (2*k + 1)
+      sum += Math.pow(-1, k) / (2 * k + 1)
     }
     sum *= 4
 
     document.getElementById("s").innerText = "submitting"
 
-    await fetch("/submit", {
+    await fetch(`${DOMAIN}/submit`, {
       method: "POST",
-      headers: {'Content-Type':'application/json'},
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         task_id: t.task_id,
         value: sum,
-        worker: worker
+        worker: w
       })
     })
 
-    let s = await fetch("/status").then(r => r.json())
-
+    let s = await fetch(`${DOMAIN}/status`).then(r => r.json())
     document.getElementById("p").innerText =
-      "π: " + s.pi +
-      " | tasks: " + s.tasks_done +
-      " | speed: " + s.speed
+      `π: ${s.pi} | tasks: ${s.tasks_done} | speed: ${s.speed}`
 
-    document.getElementById("s").innerText = "waiting"
+    setTimeout(loop, 0)
 
-    await sleep(1500)
-
-  } catch(e) {
-    document.getElementById("s").innerText =
-      "error retrying in 3s: " + e.message
-
-    await sleep(3000)
+  } catch (e) {
+    document.getElementById("s").innerText = "error retrying in 3s"
+    setTimeout(loop, 3000)
   }
-
-  loop()
 }
 
-function start(){
+function start() {
   run = true
   loop()
 }
 
-function stop(){
+function stop() {
   run = false
   document.getElementById("s").innerText = "stopped"
 }
